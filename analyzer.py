@@ -10,6 +10,23 @@ or scoring — it only knows how to talk to an AI API.
 import json
 import re
 from typing import Optional
+"""
+Add this near the top of analyzer.py, after the imports.
+"""
+
+class ResumeAnalysisError(Exception):
+    """Base exception for any failure during resume analysis."""
+    pass
+
+
+class AIProviderError(ResumeAnalysisError):
+    """Raised when the AI API call itself fails (network, auth, rate limit)."""
+    pass
+
+
+class ResponseParsingError(ResumeAnalysisError):
+    """Raised when the AI responded, but we couldn't parse usable JSON from it."""
+    pass
 
 try:
     from openai import OpenAI
@@ -207,4 +224,92 @@ def run_full_analysis(resume_text: str) -> dict:
         "detected_skills": detected_skills,
         "improvement_suggestions": improvement_data.get("improvement_suggestions", []),
         "interview_questions": interview_data.get("interview_questions", []),
+    }
+
+
+def _call_openai(prompt: str) -> str:
+    """Sends a prompt to OpenAI's API and returns the raw text response."""
+    try:
+        client = OpenAI(api_key=config.OPENAI_API_KEY)
+        response = client.chat.completions.create(
+            model=config.OPENAI_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.4,
+        )
+        return response.choices[0].message.content
+
+    except Exception as e:
+        raise AIProviderError(f"OpenAI request failed: {e}") from e
+
+
+def _call_gemini(prompt: str) -> str:
+    """Sends a prompt to Gemini's API and returns the raw text response."""
+    try:
+        genai.configure(api_key=config.GEMINI_API_KEY)
+        model = genai.GenerativeModel(config.GEMINI_MODEL)
+        response = model.generate_content(prompt)
+        return response.text
+
+    except Exception as e:
+        raise AIProviderError(f"Gemini request failed: {e}") from e
+
+
+def run_full_analysis(resume_text: str) -> dict:
+    """
+    Runs the complete resume analysis pipeline. The base AI analysis
+    (Step 1) must succeed, or the whole function fails. Steps 4-5
+    (grounded suggestions/questions) are treated as "best effort" —
+    if either fails, we degrade gracefully rather than losing
+    everything already computed.
+    """
+    # Step 1: Base AI analysis — if THIS fails, we have nothing useful
+    # to show the user, so we let the exception propagate up.
+    ai_result = analyze_resume(resume_text)
+
+    # Step 2 & 3: Our own deterministic logic — no AI involved, very
+    # unlikely to fail, but wrapped anyway for safety.
+    detected_skills = detect_skills(resume_text)
+    ats_result = calculate_ats_score(resume_text, detected_skills)
+
+    # Step 4: Grounded improvement suggestions — best effort.
+    improvement_suggestions = []
+    try:
+        improvement_prompt = build_improvement_prompt(
+            resume_text,
+            ats_result["total_score"],
+            ats_result["breakdown"],
+            detected_skills,
+            ai_result.get("missing_skills", []),
+        )
+        improvement_data = parse_ai_response(get_ai_response(improvement_prompt))
+        if improvement_data:
+            improvement_suggestions = improvement_data.get("improvement_suggestions", [])
+    except AIProviderError:
+        # Fall back to the AI's own suggestions from Step 1, if present,
+        # rather than showing nothing at all.
+        improvement_suggestions = ai_result.get("improvement_suggestions", [])
+
+    # Step 5: Grounded interview questions — best effort, same pattern.
+    interview_questions = []
+    try:
+        interview_prompt = build_interview_questions_prompt(
+            resume_text, detected_skills, ai_result.get("missing_skills", [])
+        )
+        interview_data = parse_ai_response(get_ai_response(interview_prompt))
+        if interview_data:
+            interview_questions = interview_data.get("interview_questions", [])
+    except AIProviderError:
+        # Fall back to Step 1's plain-string questions, reshaped to match
+        # our richer schema so app.py doesn't need special-case handling.
+        interview_questions = [
+            {"question": q, "type": "general", "based_on": "base analysis"}
+            for q in ai_result.get("interview_questions", [])
+        ]
+
+    return {
+        "ai_analysis": ai_result,
+        "rule_based_ats": ats_result,
+        "detected_skills": detected_skills,
+        "improvement_suggestions": improvement_suggestions,
+        "interview_questions": interview_questions,
     }

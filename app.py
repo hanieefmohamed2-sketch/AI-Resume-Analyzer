@@ -25,7 +25,7 @@ import config
 from pdf_reader import extract_text_from_pdf
 from utils.formatter import clean_text          # FIX: was `from formatter import ...`
 from analyzer import run_full_analysis           # FIX: was `analyze_resume`
-
+from report import generate_pdf_report
 
 # --------------------------------------------------------------------------
 # Page setup
@@ -346,3 +346,59 @@ else:
         mime="text/plain",
         use_container_width=False,
     )
+
+from utils.helper import load_css
+
+st.set_page_config(
+    page_title="AI Resume Analyzer",
+    page_icon="📄",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+css = load_css("assets/style.css")
+if css:
+    st.markdown(css, unsafe_allow_html=True)
+
+    pdf_bytes = generate_pdf_report(result, filename or "resume")
+st.download_button(
+    label="⬇️ Download Report (.pdf)",
+    data=pdf_bytes,
+    file_name=f"{(filename or 'resume').rsplit('.', 1)[0]}_analysis_report.pdf",
+    mime="application/pdf",
+    use_container_width=False,
+)
+
+
+from analyzer import run_full_analysis, AIProviderError, ResponseParsingError, ResumeAnalysisError
+
+...
+
+try:
+    with st.spinner("Analyzing resume with AI... this can take 10-20 seconds."):
+        result = run_full_analysis(cleaned_text)
+
+    st.session_state.analysis_result = result
+    st.session_state.resume_filename = uploaded_file.name
+    st.rerun()
+
+except AIProviderError:
+    st.error(
+        "We couldn't reach the AI service. This is usually caused by a "
+        "network issue, an invalid API key, or the service being "
+        "temporarily unavailable. Please check your connection and try again."
+    )
+
+except ResponseParsingError:
+    st.error(
+        "The AI returned a response we couldn't understand. This can "
+        "happen occasionally — please try analyzing again."
+    )
+
+except ResumeAnalysisError as e:
+    st.error(f"Analysis couldn't be completed: {e}")
+
+except Exception as e:
+    st.error("An unexpected error occurred. Please try again.")
+    with st.expander("Technical details (for debugging)"):
+        st.code(str(e))
