@@ -7,14 +7,31 @@ This module does NOT know anything about resumes, JSON parsing,
 or scoring — it only knows how to talk to an AI API.
 """
 
-from openai import OpenAI
-import google.generativeai as genai
+import json
+import re
+from typing import Optional
+
+try:
+    from openai import OpenAI
+except ImportError:
+    OpenAI = None
+
+try:
+    import google.generativeai as genai
+except ImportError:
+    genai = None
 
 import config
+from prompts import build_analysis_prompt
 
 
 def _call_openai(prompt: str) -> str:
     """Sends a prompt to OpenAI's API and returns the raw text response."""
+    if OpenAI is None:
+        raise ImportError(
+            "The 'openai' package is not installed. Please run 'pip install openai' to use the OpenAI provider."
+        )
+
     client = OpenAI(api_key=config.OPENAI_API_KEY)
 
     response = client.chat.completions.create(
@@ -30,6 +47,11 @@ def _call_openai(prompt: str) -> str:
 
 def _call_gemini(prompt: str) -> str:
     """Sends a prompt to Gemini's API and returns the raw text response."""
+    if genai is None:
+        raise ImportError(
+            "The 'google-generativeai' package is not installed. Please run 'pip install google-generativeai' to use the Gemini provider."
+        )
+
     genai.configure(api_key=config.GEMINI_API_KEY)
     model = genai.GenerativeModel(config.GEMINI_MODEL)
 
@@ -58,11 +80,6 @@ def get_ai_response(prompt: str) -> str:
         return _call_gemini(prompt)
     else:
         raise ValueError(f"Unsupported AI_PROVIDER: {config.AI_PROVIDER}")
-    
-    import json
-import re
-
-from prompts import build_analysis_prompt
 
 
 def _extract_json_block(raw_text: str) -> str:
@@ -136,83 +153,4 @@ def analyze_resume(resume_text: str) -> dict:
             "This can happen occasionally — please try again."
         )
 
-    return parsed
-
-import json
-import re
-
-from prompts import build_analysis_prompt
-
-
-def _extract_json_block(raw_text: str) -> str:
-    """
-    Isolates the JSON object from a raw AI response, stripping away
-    any markdown code fences or extra text the model may have added
-    despite instructions not to.
-
-    Args:
-        raw_text: The raw text response from the AI model.
-
-    Returns:
-        A string containing (hopefully) only the JSON object.
-    """
-    # Remove markdown code fences like ```json ... ``` or ``` ... ```
-    cleaned = re.sub(r"```json|```", "", raw_text).strip()
-
-    # Find the first '{' and the last '}' to isolate the JSON object,
-    # in case the model added any stray text before/after it
-    start = cleaned.find("{")
-    end = cleaned.rfind("}")
-
-    if start == -1 or end == -1 or end < start:
-        return cleaned  # nothing that looks like JSON was found
-
-    return cleaned[start:end + 1]
-
-
-def parse_ai_response(raw_text: str) -> Optional[dict]:
-    """
-    Attempts to parse the AI's raw text response into a Python dictionary.
-
-    Args:
-        raw_text: The raw text returned by the AI model.
-
-    Returns:
-        A dictionary if parsing succeeded, otherwise None.
-    """
-    json_block = _extract_json_block(raw_text)
-
-    try:
-        return json.loads(json_block)
-    except json.JSONDecodeError as e:
-        print(f"Failed to parse AI response as JSON: {e}")
-        return None
-
-
-def analyze_resume(resume_text: str) -> dict:
-    """
-    Runs the full resume analysis pipeline: builds the prompt, calls the
-    AI model, and parses the result into a structured dictionary.
-
-    Args:
-        resume_text: The cleaned resume text to analyze.
-
-    Returns:
-        A dictionary containing the structured analysis
-        (ats_score, skills_found, strengths, etc.).
-
-    Raises:
-        ValueError: If the AI response could not be parsed as valid JSON.
-    """
-    prompt = build_analysis_prompt(resume_text)
-    raw_response = get_ai_response(prompt)
-
-    parsed = parse_ai_response(raw_response)
-
-    if parsed is None:
-        raise ValueError(
-            "The AI response could not be parsed as valid JSON. "
-            "This can happen occasionally — please try again."
-        )
-
-    return parsed
+    return parsed
