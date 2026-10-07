@@ -133,3 +133,62 @@ def build_improvement_prompt(
         skills_found=", ".join(skills_found) if skills_found else "None detected",
         missing_skills=", ".join(missing_skills) if missing_skills else "None identified",
     )
+
+INTERVIEW_QUESTIONS_PROMPT_TEMPLATE = """
+You are a senior technical interviewer preparing to interview this specific
+candidate. You have read their resume carefully and now need to prepare
+questions that reference SPECIFIC details from it — not generic interview
+questions that could apply to anyone.
+
+Resume text:
+---
+{resume_text}
+---
+
+Skills this candidate claims: {skills_found}
+Skills commonly expected for this field that seem absent: {missing_skills}
+
+Generate exactly 7 interview questions following these rules:
+- At least 3 questions must directly reference a specific project,
+  achievement, number, or company mentioned in the resume text above.
+- At least 2 questions must be technical, testing depth of knowledge in
+  a specific skill the candidate claims to have.
+- At least 1 question must probe a gap — for example, asking how the
+  candidate handled something related to a missing skill, or asking for
+  evidence behind a claimed skill that has no supporting project/detail.
+- At least 1 question should be behavioral, grounded in a specific
+  experience mentioned in the resume (not a generic behavioral question).
+
+Respond ONLY with a valid JSON object in this exact structure:
+
+{{
+  "interview_questions": [
+    {{"question": "<question text>", "type": "<technical|behavioral|gap-probing>", "based_on": "<short note on what resume detail this references>"}},
+    ...
+  ]
+}}
+"""
+
+
+def build_interview_questions_prompt(
+    resume_text: str,
+    skills_found: list,
+    missing_skills: list,
+) -> str:
+    """
+    Builds a prompt for generating interview questions grounded in
+    specific resume content, rather than generic question banks.
+
+    Args:
+        resume_text: The cleaned resume text.
+        skills_found: Skills detected in the resume.
+        missing_skills: Skills identified as potentially missing.
+
+    Returns:
+        A complete prompt string ready to send to the AI model.
+    """
+    return INTERVIEW_QUESTIONS_PROMPT_TEMPLATE.format(
+        resume_text=resume_text,
+        skills_found=", ".join(skills_found) if skills_found else "None detected",
+        missing_skills=", ".join(missing_skills) if missing_skills else "None identified",
+    )

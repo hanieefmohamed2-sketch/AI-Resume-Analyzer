@@ -153,4 +153,58 @@ def analyze_resume(resume_text: str) -> dict:
             "This can happen occasionally — please try again."
         )
 
-    return parsed
+    return parsed
+
+
+from ats import calculate_ats_score
+from skills import detect_skills
+from prompts import build_improvement_prompt, build_interview_questions_prompt
+
+
+def run_full_analysis(resume_text: str) -> dict:
+    """
+    Runs the complete resume analysis pipeline: base AI analysis,
+    rule-based ATS scoring, rule-based skill detection, grounded
+    improvement suggestions, and grounded interview questions.
+
+    Args:
+        resume_text: The cleaned resume text.
+
+    Returns:
+        A single merged dictionary containing all analysis results.
+    """
+    # Step 1: Base AI analysis (Lesson 9)
+    ai_result = analyze_resume(resume_text)
+
+    # Step 2: Our own deterministic skill detection (Lesson 11)
+    detected_skills = detect_skills(resume_text)
+
+    # Step 3: Our own deterministic ATS scoring (Lesson 10)
+    ats_result = calculate_ats_score(resume_text, detected_skills)
+
+    # Step 4: Grounded improvement suggestions (Lesson 12)
+    improvement_prompt = build_improvement_prompt(
+        resume_text,
+        ats_result["total_score"],
+        ats_result["breakdown"],
+        detected_skills,
+        ai_result.get("missing_skills", []),
+    )
+    improvement_data = parse_ai_response(get_ai_response(improvement_prompt)) or {}
+
+    # Step 5: Grounded interview questions (Lesson 13)
+    interview_prompt = build_interview_questions_prompt(
+        resume_text,
+        detected_skills,
+        ai_result.get("missing_skills", []),
+    )
+    interview_data = parse_ai_response(get_ai_response(interview_prompt)) or {}
+
+    # Step 6: Merge everything into one结果 dictionary for the UI
+    return {
+        "ai_analysis": ai_result,
+        "rule_based_ats": ats_result,
+        "detected_skills": detected_skills,
+        "improvement_suggestions": improvement_data.get("improvement_suggestions", []),
+        "interview_questions": interview_data.get("interview_questions", []),
+    }

@@ -1,0 +1,70 @@
+/* assets/style.css
+   Custom styling for AI Resume Analyzer.
+   Loaded by app.py via a helper function — see utils/helper.py
+*/
+
+/* ---------- Layout & spacing ---------- */
+
+.block-container {
+    padding-top: 2rem;
+    padding-bottom: 3rem;
+    max-width: 1200px;
+}
+
+/* ---------- Metric cards (ATS scores) ---------- */
+
+div[data-testid="stMetric"] {
+    background: rgba(37, 99, 235, 0.06);
+    border: 1px solid rgba(37, 99, 235, 0.15);
+    padding: 1.25rem 1rem;
+    border-radius: 0.75rem;
+}
+
+div[data-testid="stMetricValue"] {
+    font-weight: 700;
+}
+
+/* ---------- Skill / tag pills ---------- */
+
+.streak-tag {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    margin: 0.2rem;
+    border-radius: 999px;
+    background: rgba(37, 99, 235, 0.10);
+    color: #1E3A8A;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+/* ---------- Section headers ---------- */
+
+h2,
+h3 {
+    font-weight: 600;
+}
+
+/* ---------- Tabs: give active tab more visual weight ---------- */
+
+button[data-baseweb="tab"] {
+    font-weight: 600;
+}
+
+/* ---------- Responsive: narrow screens ---------- */
+
+@media (max-width: 640px) {
+    .block-container {
+        padding-left: 1rem;
+        padding-right: 1rem;
+        padding-top: 1rem;
+    }
+
+    div[data-testid="stMetricValue"] {
+        font-size: 1.4rem;
+    }
+
+    .streak-tag {
+        font-size: 0.75rem;
+        padding: 0.2rem 0.6rem;
+    }
+}
