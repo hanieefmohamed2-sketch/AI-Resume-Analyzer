@@ -7,17 +7,21 @@ ReportLab's Platypus API for automatic text flow and page breaks.
 
 import io
 
-from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch
-from reportlab.lib import colors
-from reportlab.platypus import (
-    SimpleDocTemplate,
-    Paragraph,
-    Spacer,
-    Table,
-    TableStyle,
-)
+try:
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import inch
+    from reportlab.lib import colors
+    from reportlab.platypus import (
+        SimpleDocTemplate,
+        Paragraph,
+        Spacer,
+        Table,
+        TableStyle,
+    )
+except ImportError:
+    SimpleDocTemplate = None
+
 
 
 def _build_styles() -> dict:
@@ -58,18 +62,14 @@ def _bullet_list(items: list, styles: dict) -> list:
 
 def generate_pdf_report(result: dict, filename: str) -> bytes:
     """
-    Builds a complete PDF report from a full analysis result dict
-    (the nested structure returned by analyzer.run_full_analysis()).
-
-    Args:
-        result: The full analysis result dictionary.
-        filename: The original resume's filename, shown in the report header.
-
-    Returns:
-        The generated PDF as raw bytes, ready for st.download_button().
+    Builds a complete PDF report from a full analysis result dict.
     """
+    if SimpleDocTemplate is None:
+        raise RuntimeError("ReportLab package is not installed. Please run 'pip install reportlab' to enable PDF export.")
+
     ai_data = result["ai_analysis"]
     ats_data = result["rule_based_ats"]
+
 
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -159,3 +159,70 @@ def generate_pdf_report(result: dict, filename: str) -> bytes:
     buffer.close()
 
     return pdf_bytes
+
+
+def build_text_report(result: dict, filename: str) -> str:
+    """
+    Builds a plain-text version of the analysis for download.
+    """
+    ai_data = result.get("ai_analysis", {})
+    ats_data = result.get("rule_based_ats", {})
+
+    lines = [
+        "AI RESUME ANALYZER — REPORT",
+        f"File: {filename}",
+        "=" * 50,
+        "",
+        f"AI ATS Score: {ai_data.get('ats_score', 'N/A')}/100",
+        f"Rule-Based ATS Score: {ats_data.get('total_score', 'N/A')}/100",
+        "",
+        "ATS SCORE BREAKDOWN",
+        "-" * 50,
+    ]
+    for category, details in ats_data.get("breakdown", {}).items():
+        lines.append(f"- {category}: {details['points']} pts — {details['reason']}")
+
+    lines += [
+        "",
+        "SUMMARY",
+        "-" * 50,
+        ai_data.get("summary", ""),
+        "",
+    ]
+
+    ai_sections = [
+        ("MISSING SKILLS (per AI)", "missing_skills"),
+        ("STRENGTHS", "strengths"),
+        ("WEAKNESSES", "weaknesses"),
+        ("RECOMMENDED CERTIFICATIONS", "recommended_certifications"),
+        ("SUGGESTED PROJECTS", "suggested_projects"),
+        ("TECHNOLOGIES TO LEARN", "technologies_to_learn"),
+        ("RECOMMENDED ROLES", "recommended_roles"),
+    ]
+    for title, key in ai_sections:
+        lines.append(title)
+        lines.append("-" * 50)
+        for item in ai_data.get(key, []) or []:
+            lines.append(f"- {item}")
+        lines.append("")
+
+    lines.append("SKILLS DETECTED (rule-based)")
+    lines.append("-" * 50)
+    for item in result.get("detected_skills", []):
+        lines.append(f"- {item}")
+    lines.append("")
+
+    lines.append("IMPROVEMENT SUGGESTIONS (grounded)")
+    lines.append("-" * 50)
+    for item in result.get("improvement_suggestions", []):
+        lines.append(f"- {item}")
+    lines.append("")
+
+    lines.append("LIKELY INTERVIEW QUESTIONS (grounded)")
+    lines.append("-" * 50)
+    for q in result.get("interview_questions", []):
+        lines.append(f"- [{q.get('type', 'general')}] {q.get('question', '')}")
+        lines.append(f"    based on: {q.get('based_on', '')}")
+    lines.append("")
+
+    return "\n".join(lines)

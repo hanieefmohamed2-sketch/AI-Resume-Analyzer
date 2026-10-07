@@ -5,29 +5,46 @@ Responsible for extracting raw text from an uploaded PDF resume.
 This module has ONE job: PDF -> plain text. Nothing else.
 """
 
-import pdfplumber
+try:
+    import pdfplumber
+except ImportError:
+    pdfplumber = None
+
+try:
+    from pypdf import PdfReader
+except ImportError:
+    PdfReader = None
+
 from typing import Optional
 
 
 def extract_text_from_pdf(uploaded_file) -> Optional[str]:
     """
     Extracts all readable text from a PDF file.
-
-    Args:
-        uploaded_file: A file-like object (e.g., from Streamlit's file_uploader,
-                        or a standard Python file opened in 'rb' mode).
-
-    Returns:
-        A single string containing all extracted text from every page,
-        or None if no text could be extracted.
+    Supports pdfplumber and pypdf with automatic fallback.
     """
     extracted_text = ""
 
     try:
-        with pdfplumber.open(uploaded_file) as pdf:
-            for page in pdf.pages:
-                page_text = page.extract_text()
+        if pdfplumber is not None:
+            try:
+                with pdfplumber.open(uploaded_file) as pdf:
+                    for page in pdf.pages:
+                        page_text = page.extract_text()
+                        if page_text:
+                            extracted_text += page_text + "\n"
+                if extracted_text.strip():
+                    return extracted_text
+            except Exception as e:
+                print(f"pdfplumber failed, trying pypdf fallback: {e}")
 
+        if hasattr(uploaded_file, "seek"):
+            uploaded_file.seek(0)
+
+        if PdfReader is not None:
+            reader = PdfReader(uploaded_file)
+            for page in reader.pages:
+                page_text = page.extract_text()
                 if page_text:
                     extracted_text += page_text + "\n"
 
@@ -38,4 +55,4 @@ def extract_text_from_pdf(uploaded_file) -> Optional[str]:
     if not extracted_text.strip():
         return None
 
-    return extracted_text
+    return extracted_text

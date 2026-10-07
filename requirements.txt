@@ -14,6 +14,7 @@ distro==1.9.0
 gitdb==4.0.12
 GitPython==3.1.51
 google-generativeai>=0.8.0
+fastapi>=0.110.0
 h11==0.16.0
 httpcore==1.0.9
 httptools==0.8.0
