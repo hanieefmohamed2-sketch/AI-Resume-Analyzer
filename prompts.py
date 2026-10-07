@@ -61,3 +61,75 @@ def build_analysis_prompt(resume_text: str) -> str:
         A complete prompt string ready to send to the AI model.
     """
     return RESUME_ANALYSIS_PROMPT_TEMPLATE.format(resume_text=resume_text)
+
+IMPROVEMENT_SUGGESTIONS_PROMPT_TEMPLATE = """
+You are an expert career coach. Below is a candidate's resume, along with
+concrete computed facts about it. Use these SPECIFIC facts to generate
+SPECIFIC, non-generic improvement suggestions — avoid vague advice that
+could apply to any resume.
+
+Resume text:
+---
+{resume_text}
+---
+
+Computed ATS score: {ats_score}/100
+ATS score breakdown:
+{ats_breakdown}
+
+Skills detected: {skills_found}
+Skills that may be missing for a typical role in this field: {missing_skills}
+
+Based on these SPECIFIC facts (not generic resume advice), provide exactly
+5 improvement suggestions. Each suggestion must reference something
+concrete from the facts above (e.g., a specific missing skill, a specific
+low-scoring ATS category, or a specific weak section).
+
+Respond ONLY with a valid JSON object in this exact structure:
+
+{{
+  "improvement_suggestions": [
+    "<specific suggestion 1>",
+    "<specific suggestion 2>",
+    "<specific suggestion 3>",
+    "<specific suggestion 4>",
+    "<specific suggestion 5>"
+  ]
+}}
+"""
+
+
+def build_improvement_prompt(
+    resume_text: str,
+    ats_score: int,
+    ats_breakdown: dict,
+    skills_found: list,
+    missing_skills: list,
+) -> str:
+    """
+    Builds a context-enriched prompt for generating specific, grounded
+    improvement suggestions, using computed ATS and skills data.
+
+    Args:
+        resume_text: The cleaned resume text.
+        ats_score: The rule-based ATS score from ats.py.
+        ats_breakdown: The score breakdown dict from ats.py.
+        skills_found: Skills detected by skills.py.
+        missing_skills: Skills identified as missing.
+
+    Returns:
+        A complete prompt string ready to send to the AI model.
+    """
+    # Format the breakdown dict into readable lines for the prompt
+    breakdown_lines = "\n".join(
+        f"- {category}: {details['points']} points ({details['reason']})"
+        for category, details in ats_breakdown.items()
+    )
+
+    return IMPROVEMENT_SUGGESTIONS_PROMPT_TEMPLATE.format(
+        resume_text=resume_text,
+        ats_score=ats_score,
+        ats_breakdown=breakdown_lines,
+        skills_found=", ".join(skills_found) if skills_found else "None detected",
+        missing_skills=", ".join(missing_skills) if missing_skills else "None identified",
+    )
